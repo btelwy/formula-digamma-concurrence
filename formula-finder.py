@@ -83,7 +83,7 @@ for (textFile, syllFile, xmlFile) in zip(textFiles, syllFiles, xmlFiles):
                 wordNumEndIndex = wordNumStartIndex + len(str(wordNum))
 
                 while (index < len(syllRows) and \
-                       syllRows[index][wordNumStartIndex : wordNumEndIndex] \
+                    syllRows[index][wordNumStartIndex : wordNumEndIndex] \
                             == str(wordNum + 1)): #find the right word number
 
                     if syllRows[index].__contains__("long"):
