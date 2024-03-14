@@ -5,15 +5,12 @@ from collections import defaultdict
 import betacode.conv as betacode
 import re
 
-textFiles = ["TextEdited\\IliadTextEdited.csv", "TextEdited\\OdysseyTextEdited.csv"]
-syllFiles = ["CombinedCSVs\\IliadCombined.csv", "CombinedCSVs\\OdysseyCombined.csv"]
-xmlFiles = ["Diorisis\Homer (0012) - Iliad (001).xml", "Diorisis\Homer (0012) - Odyssey (002).xml"]
-
-#these file lists put the Odyssey first, for testing
-"""textFiles = ["TextEdited\\OdysseyTextEdited.csv", "TextEdited\\IliadTextEdited.csv"]
-syllFiles = ["CombinedCSVs\\OdysseyCombined.csv", "CombinedCSVs\\IliadCombined.csv"]
-xmlFiles = ["Diorisis\Homer (0012) - Odyssey (002).xml", "Diorisis\Homer (0012) - Iliad (001).xml"]"""
-
+textFiles = ["Data\\Input Data\\Text Data\\IliadTextEdited.csv",
+            "Data\\Input Data\\Text Data\\OdysseyTextEdited.csv"]
+syllFiles = ["Data\\Input Data\\Scansion Data\\IliadEdited\\IliadCombined.csv",
+            "Data\\Input Data\\Scansion Data\\OdysseyEdited\\OdysseyCombined.csv"]
+xmlFiles = ["Data\\Input Data\\Diorisis\\Homer (0012) - Iliad (001).xml",
+            "Data\\Input Data\\Diorisis\\Homer (0012) - Odyssey (002).xml"]
 
 #figure out why the Odyssey is almost all "unknown" for POS
 
@@ -132,11 +129,11 @@ for (textFile, syllFile, xmlFile) in zip(textFiles, syllFiles, xmlFiles):
 del wordData["Title Book Line 0"] #remove first element from dict
 
 #max, min word number of formula
-maxLen = 4
+maxLen = 7
 minLen = 2
 
 #minimum occurrences of formula in order to be counted
-minFreq = 6
+minFreq = 4
 
 #split the dict into two lists, which is for some reason much faster
 keys = list(wordData.keys())
@@ -202,7 +199,42 @@ print(len(substringDict))
 
 formulas = [x for x in substringDict if substringDict[x] >= minFreq]
 
-#print(substringDict)
-
 for formula in formulas:
     pprint.pprint(f"{formula}: {substringLocs[formula]}")
+
+#Uncomment the code below in order to print the detected formulas into a .csv
+"""headerNotWritten = True
+csvName = "Iliad+OdysseyFormulas"
+
+#a variable that will be used to uniquely identify each row of the .csv; the primary key
+count = 1
+
+for formula in formulas:
+    for location in substringLocs[formula]:
+        with open("Data\\Output Data\\" + csvName + ".csv", "a", newline='', encoding="utf8") as output:
+            writer = csv.writer(output)
+
+            #number of words in the formula
+            numWords = len(formula.split())
+
+            #Each location value consists of four "words",
+            #e.g., "Od 23 318 0"
+            locationData = location.split()
+
+            #The source is "Il" or "Od"
+            source = locationData[0]
+            book = locationData[1]
+            line = locationData[2]
+            wordInLine = locationData[3]
+
+            #write header once
+            if headerNotWritten:
+                writer.writerow(["Formula","Book","Line","Word Number","Word Count","Source","ID"])
+                headerNotWritten = False
+
+            #Write the row in the .csv with data corresponding to this formula
+            #Increment count by 1 just so it being 1-indexed is consistent with data collected through SQL
+            writer.writerow([formula, book, line, wordInLine, numWords, source, count])
+
+            #increment in preparation for next row
+            count += 1"""
