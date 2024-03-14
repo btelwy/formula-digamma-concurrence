@@ -2,6 +2,8 @@ import csv
 import pprint
 from collections import defaultdict
 
+#Ϝ, ϝ
+
 """
 Cases where initial digamma can be reconstructed:
 1. hiatus after a short vowel, preventing elision which normally would have occurred, or the presence of νῦ ἐφελκυστικόν (“movable letter ν”)
