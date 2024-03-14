@@ -2,9 +2,8 @@ from urllib.request import urlopen
 from bs4 import BeautifulSoup
 import re
 import unicodedata
-import torch
 import csv
-#import neuralnetwork
+
 
 def getText(url, endPhrase):
     #consider replacing alpha iota subscripts/adscripts with an alpha-iota diphthong
@@ -178,9 +177,9 @@ def longByPosition(line, syllableLengths):
             #else if the next two letters are consonants, and categorize by whether a plosive + liquid or plosive + nasal
             elif k + 1 < len(line) and not (isVowel(line, j) or isVowel(line, k) or line[j:j + 1] == "\n" or line[k:k + 1] == "\n"):
                 if ((line[j:j + 1] == "π" or line[j:j + 1] == "β" or line[j:j + 1] == "φ" or
-                     line[j:j + 1] == "τ" or line[j:j + 1] == "δ" or line[j:j + 1] == "θ" or
-                     line[j:j + 1] == "κ" or line[j:j + 1] == "γ" or line[j:j + 1] == "χ")
-                     and (line[k:k + 1] == "λ" or line[k:k + 1] == "ρ")):
+                    line[j:j + 1] == "τ" or line[j:j + 1] == "δ" or line[j:j + 1] == "θ" or
+                    line[j:j + 1] == "κ" or line[j:j + 1] == "γ" or line[j:j + 1] == "χ")
+                    and (line[k:k + 1] == "λ" or line[k:k + 1] == "ρ")):
                     uncertainIndices.append(i)
                 else:
                     longIndices.append(i)
@@ -273,7 +272,7 @@ def identifyFeet(syllableLengths):
     numSyllables = len(syllables)
     syllablesRemoved = 0 #incremented each time an item from syllableLengths is deleted to subtract from numSyllables
     currentFoot = 5 #index of next foot to add
-   
+
     if (syllables[-2] == 1 and syllables[-1] == 1):
         feet[currentFoot] = "spondee"
     #not necessarily true, it could still be a spondee, adjust later
@@ -308,7 +307,7 @@ def identifyFeet(syllableLengths):
                 del syllables[-3:]
 
             elif ((syllables[-3] == 1 and syllables[-2] == 0 and syllables[-1] == 0) or 
-                  (syllables[-3] == 2 and syllables[-2] == 0 and syllables[-1] == 0)):
+                (syllables[-3] == 2 and syllables[-2] == 0 and syllables[-1] == 0)):
                 feet[currentFoot] = "dactyl"
                 del syllables[-3:]
 

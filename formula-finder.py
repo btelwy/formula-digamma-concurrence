@@ -58,7 +58,6 @@ for (textFile, syllFile, xmlFile) in zip(textFiles, syllFiles, xmlFiles):
             while (index < len(syllRows)): #find the right book and line number
                 if (syllRows[index][0 : len(line[1])] == line[1] and \
                     syllRows[index][len(line[1]) + 1 : len(line[1]) + 1 + len(line[2])] == line[2]):
-                
                     break
                 
                 index += 1
