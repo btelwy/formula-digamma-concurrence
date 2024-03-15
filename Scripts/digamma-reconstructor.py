@@ -1,7 +1,9 @@
 import csv
-import pprint
-from collections import defaultdict
 import unicodedata
+
+#limitation: plosive + liquid is always treated as
+#not satisfying long by position
+#another one: the way the source represents elision
 
 
 """
@@ -19,39 +21,26 @@ def normalize(str):
         if unicodedata.category(c) != 'Mn')
 
 
-def isVowel(line, index):
+def isVowel(phrase, index):
     #checks if char at index is a vowel by running every possibility of isSameVowel
 
-    line = normalize(line)
+    phrase = normalize(phrase)
 
-    vowel = line[index:index + 1]
-    return (vowel == "α" or vowel == "ε" or vowel == "ι" or vowel == "ο" or vowel == "η" or vowel == "υ" or vowel == "ω"
-        or vowel == "e" or vowel == "o")
-
-
-def isLong(line, index):
-    #checks if a vowel is long or short
-    #returns 1 for long, 0 for short, 2 for undetermined / N/A
-
-    vowel = line[index:index + 1]
-
-    if (vowel == "ᾱ" or vowel == "ῑ" or vowel == "ῡ" or vowel == "η" or vowel == "ω" or vowel == "ō" or vowel == "ē"):
-        return 1
-    elif (vowel == "ᾰ" or vowel == "ῐ" or vowel == "ῠ" or vowel == "ĕ" or vowel == "ŏ"):
-        return 0
-    else:
-        return 2
+    vowel = phrase[index:index + 1]
+    return (vowel == "α" or vowel == "ε" or vowel == "ι"
+        or vowel == "ο" or vowel == "η" or vowel == "υ"
+        or vowel == "ω" or vowel == "e" or vowel == "o")
 
 
-def isDiphthong(line, index):
+def isDiphthong(phrase, index):
     #checks if a vowel is the first part of a diphthong
     #diphthongs: αι, αυ, ει, ευ, οι, ου, ηυ, υι, ᾳ, ῃ, ῳ
 
-    line = normalize(line)
+    phrase = normalize(phrase)
 
-    if (index + 1 < len(line)): #make sure it doesn't go out of bounds
-        vowel = line[index : index + 1]
-        nextVowel = line[index + 1 : index + 2]
+    if (index + 1 < len(phrase)): #make sure it doesn't go out of bounds
+        vowel = phrase[index : index + 1]
+        nextVowel = phrase[index + 1 : index + 2]
 
         if (vowel == "α"):
             if (nextVowel == "ι" or nextVowel == "υ"):
@@ -76,34 +65,200 @@ def isDiphthong(line, index):
     return False
 
 
-def insertDigamma(line, index):
-    #Ϝ, ϝ
-    #insert digamma at the index in the line
-    line = line[: index] + "ϝ" + line[index + 1 :]
-    return line
+def longByPosition(prevPhrase, phrase):
+    #add the first two letters of the current row
+    #to the previous row for necessary context
+    phrase = prevPhrase + phrase[0 : 2]
+    
+    for i in range (0, len(phrase) - 1):
+        j = i + 1
+        k = j + 1
+        #i is the index of the current letter, j of the next letter, k of the next letter after that
 
-#possible limitation of not checking what's after the end of a line
+        #if it's a vowel and not part of a diphthong, in which case it's already long
+        if (isVowel(phrase, i) and not (isDiphthong(phrase, i) or (i > 0 and isDiphthong(phrase, i - 1)))):
+            while (j + 1 < len(phrase) and (phrase[j:j + 1] == " " or phrase[j:j + 1] == "᾽")):
+                #go to the next letter
+                j += 1
+                k = j + 1
+            while ((phrase[k:k + 1] == " " or phrase[k:k + 1] == "᾽")):
+                #go to the next letter after that
+                k += 1
+                
+            #and the next char is a double consonant, mark long
+            if ((phrase[j:j + 1] == "ξ" or phrase[j:j + 1] == "ψ" or phrase[j:j + 1] == "ζ")):
+                return True
+            
+            #else if the next two letters are consonants,
+            #categorize by if they're possibley a
+            #plosive + liquid or #losive + nasal
+            if (k + 1 < len(phrase) and not (isVowel(phrase, j) or isVowel(phrase, k) or phrase[j:j + 1] == "\n"
+                or phrase[k:k + 1] == "\n")):
+                if ((phrase[j:j + 1] == "π" or phrase[j:j + 1] == "β" or phrase[j:j + 1] == "φ" or
+                    phrase[j:j + 1] == "τ" or phrase[j:j + 1] == "δ" or phrase[j:j + 1] == "θ" or
+                    phrase[j:j + 1] == "κ" or phrase[j:j + 1] == "γ" or phrase[j:j + 1] == "χ")
+                    and (phrase[k:k + 1] == "λ" or phrase[k:k + 1] == "ρ")):
+                    return False
+                
+            return True
+
 
 #Case 1: hiatus after a short vowel, preventing elision
-def case1(line):
+def case1(row, prevRow):
+    #ensure the previous vowel is short
+    if (prevRow['Length'] == "long"):
+        return False
     
+    #that the previous vowel is word-final
+    if (not isVowel(prevRow['Text'], len(prevRow['Text']) - 1)):
+        return False
 
-    return -1
+    #and that there's a word-initial vowel in the current word
+    if (not isVowel(row['Text'], 0)):
+        return False
+
+    return True
 
 
 #Case 2: non-shortening of vowels and diphthongs in hiatus
-def case2(line):
+def case2(row, prevRow):
+    #ensure that the previous syllable is long
+    if (prevRow['Length'] == "short"):
+        return False
+    
+    #that the previous vowel is word-final
+    if (not isVowel(prevRow['Text'], len(prevRow['Text']) - 1)):
+        return False
 
+    #and that there's a word-initial vowel in the current word
+    if (not isVowel(row['Text'], 0)):
+        return False
 
-    return -1
+    return True
 
 
 #Case 3: a vowel that should be short scanning as long
 #because digamma made it long by position
-def case3(line):
+def case3(row, prevRow):
+    #ensure that the previous syllable is long
+    if (prevRow['Length'] == "short"):
+        return False
+
+    #and that the previous vowel does not qualify
+    #for being long by position
+    if (longByPosition(prevRow['Text'], row['Text'])):
+        return False
+    
+    #but that it could if digamma were reconstructed
+    #before it as either VϝC or VCϝ
+    VϝC = longByPosition(prevRow['Text'], "ϝ" + row['Text'])
+    VCϝ = longByPosition(prevRow['Text'], row['Text'][0] + "ϝ" + row['Text'][1:])
+
+    if (not (VϝC or VCϝ)):
+        return False
+
+    return True
 
 
-    return -1
+def doAllChecks(row, prevRow):
+    #it is assumed that there could only be one
+    #digamma per syllable, and there is only one
+    #syllable per .csv row
+
+    if (case1(row, prevRow)):
+        return True
+    
+    if (case2(row, prevRow)):
+        return True
+    
+    if (case3(row, prevRow)):
+        return True
+
+    return False
+
+
+def canCheck(row, prevRow, rowNum, totalRows):
+    #if it's not the last syllable in the file
+    #in which case checking would cause an error
+    #or if it's the first, in which case
+    #there's not enough data to check
+    if (rowNum > totalRows - 2 or rowNum == 1):
+        return False
+    
+    #if it's the first syllable of a word
+    #otherwise it probably wouldn't be initial digamma
+    if (row['Word'] == prevRow['Word']):
+        return False
+    
+    #if the two rows are not from the same line or book
+    if (row['Line'] != prevRow['Line']):
+        return False
+    if (row['Book'] != prevRow['Book']):
+        return False
+    
+    #if there's elision in this syllable
+    #or the previous one
+    if ("’" in row['Text'] or "’" in prevRow['Text']):
+        return False
+
+    return True
 
 
 #and now do the reconstructing
+newCsvName = "Iliad+OdysseyDigammas"
+newCsv = "Data\\Output Data\\" + newCsvName + ".csv"
+inputCsvs = ["Data\\Input Data\\Scansion Data\\IliadEdited\\IliadCombined.csv",
+            "Data\\Input Data\\Scansion Data\\OdysseyEdited\\OdysseyCombined.csv"]
+
+csvs = [inputCsvs[0], inputCsvs[1]]
+
+#so the first line of the .csv isn't repeated
+headerWritten = False
+prevRow = None
+rowNum = 1
+totalRows = 0
+
+for inputCsv in inputCsvs:
+    with open(newCsv, "a", newline='', encoding="utf8") as output:
+        with open(inputCsv, "r", newline='', encoding="utf8") as input:
+            
+            writer = csv.writer(output)
+            reader = csv.DictReader(input)
+
+            #exhaust iterator to find number of rows
+            #then reset it back to the start
+            totalRows += len(list(reader))
+            input.seek(0)
+            next(reader)
+
+            if (not headerWritten):
+                writer.writerow(["Book","Line","Word","Text","Length","Digamma","Foot","Source"])
+                headerWritten = True
+
+            for row in reader:
+                digamma = False
+
+                source = ""
+                if (inputCsv == csvs[0]):
+                    source = "Il"
+                else:
+                    source = "Od"
+
+                #make sure it's appropriate to
+                #check for initial digamma here
+                if (canCheck(row, prevRow, rowNum, totalRows)):
+                
+                    #if a digamma can be reconstructed
+                    if (doAllChecks(row, prevRow)):
+                        digamma = True
+                        #record that in a new .csv
+                    
+                contents = [row['Book'], row['Line'],
+                    row['Word'], row['Text'], row['Length'],
+                    digamma, row['Foot'], source]
+                writer.writerow(contents)
+
+                prevRow = row
+                rowNum += 1
+
+print("Finished.")
