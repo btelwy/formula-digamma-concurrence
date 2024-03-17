@@ -232,11 +232,11 @@ for inputCsv in inputCsvs:
             next(reader)
 
             if (not headerWritten):
-                writer.writerow(["Book","Line","Word","Text","Length","Digamma","Foot","Source"])
+                writer.writerow(["Source","Book","Line","Word","Foot","Syllable","Text","Length","HasDigamma"])
                 headerWritten = True
 
             for row in reader:
-                digamma = False
+                digamma = 0 #indicating False
 
                 source = ""
                 if (inputCsv == csvs[0]):
@@ -250,12 +250,12 @@ for inputCsv in inputCsvs:
                 
                     #if a digamma can be reconstructed
                     if (doAllChecks(row, prevRow)):
-                        digamma = True
+                        digamma = 1 #indicating True
                         #record that in a new .csv
                     
-                contents = [row['Book'], row['Line'],
-                    row['Word'], row['Text'], row['Length'],
-                    digamma, row['Foot'], source]
+                contents = [source, row['Book'], row['Line'],
+                    row['Word'], row['Foot'], rowNum, row['Text'], row['Length'],
+                    digamma]
                 writer.writerow(contents)
 
                 prevRow = row

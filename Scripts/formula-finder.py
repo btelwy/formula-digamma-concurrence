@@ -122,9 +122,6 @@ for (textFile, syllFile, xmlFile) in zip(textFiles, syllFiles, xmlFiles):
 
                 wordData[location.join(['', str(wordNum)])] = \
                     {"text": split, "metrics": metricInfo, "POS": pos}
-                #print(f'{split}, {metricInfo}, {pos}')
-                #if pos == "unknown":
-                    #print(f'{split}, {metricInfo}, {pos}')
 
 del wordData["Title Book Line 0"] #remove first element from dict
 
@@ -159,9 +156,6 @@ for n in range(len(wordData) - maxLen): #iterate through words
         substringDict[substring] += 1
         substringLocs[substring].append(keys[n])
 
-        #consider issues with case here, like a substring being "ἔνειμεν Καὶ"
-
-
 
 substringDictKeys = list(substringDict.keys())
 
@@ -191,10 +185,12 @@ for key in removeList:
 print(len(substringDict))
 
 
+#TODO:
 #add functionality to concatenate neighboring/overlapping substrings that occur the same number of times
 #and don't surpoass the length limit once concatenated, else remove them
 #adjacency can be determined using substringLocs
 #consider adding a tag in substringLocs if a word is the last in its line
+#and also implement POS checking for templatic formulas
 
 
 formulas = [x for x in substringDict if substringDict[x] >= minFreq]
@@ -202,7 +198,8 @@ formulas = [x for x in substringDict if substringDict[x] >= minFreq]
 for formula in formulas:
     pprint.pprint(f"{formula}: {substringLocs[formula]}")
 
-#Uncomment the code below in order to print the detected formulas into a .csv
+
+#Uncomment the code below in order to print the detected formulas into a .csv file
 """headerNotWritten = True
 csvName = "Iliad+OdysseyFormulas"
 
@@ -229,12 +226,12 @@ for formula in formulas:
 
             #write header once
             if headerNotWritten:
-                writer.writerow(["Formula","Book","Line","Word Number","Word Count","Source","ID"])
+                writer.writerow(["Source,""Book","Line","Word","NumWords","Formula","ID"])
                 headerNotWritten = False
 
             #Write the row in the .csv with data corresponding to this formula
             #Increment count by 1 just so it being 1-indexed is consistent with data collected through SQL
-            writer.writerow([formula, book, line, wordInLine, numWords, source, count])
+            writer.writerow([source, book, line, wordInLine, numWords, formula, count])
 
             #increment in preparation for next row
             count += 1"""
