@@ -191,6 +191,7 @@ def canCheck(row, prevRow, rowNum, totalRows):
         return False
     
     #if the two rows are not from the same line or book
+    #otherwise there's not enough context
     if (row['Line'] != prevRow['Line']):
         return False
     if (row['Book'] != prevRow['Book']):
@@ -212,11 +213,17 @@ inputCsvs = ["Data\\Input Data\\Scansion Data\\IliadEdited\\IliadCombined.csv",
 
 csvs = [inputCsvs[0], inputCsvs[1]]
 
+#Set to true to write output to a .csv file
+shouldWriteCsv = False
+
 #so the first line of the .csv isn't repeated
 headerWritten = False
+
 prevRow = None
 rowNum = 1
 totalRows = 0
+digammaCount = 0 #number of possible digamma reconstructions
+
 
 for inputCsv in inputCsvs:
     with open(newCsv, "a", newline='', encoding="utf8") as output:
@@ -227,16 +234,16 @@ for inputCsv in inputCsvs:
 
             #exhaust iterator to find number of rows
             #then reset it back to the start
-            totalRows += len(list(reader))
+            totalRows = len(list(reader))
             input.seek(0)
             next(reader)
 
-            if (not headerWritten):
+            if (not headerWritten and shouldWriteCsv):
                 writer.writerow(["Source","Book","Line","Word","Foot","Syllable","Text","Length","HasDigamma"])
                 headerWritten = True
 
             for row in reader:
-                digamma = 0 #indicating False
+                isDigamma = 0 #indicating False
 
                 source = ""
                 if (inputCsv == csvs[0]):
@@ -250,15 +257,19 @@ for inputCsv in inputCsvs:
                 
                     #if a digamma can be reconstructed
                     if (doAllChecks(row, prevRow)):
-                        digamma = 1 #indicating True
-                        #record that in a new .csv
-                    
-                contents = [source, row['Book'], row['Line'],
-                    row['Word'], row['Foot'], rowNum, row['Text'], row['Length'],
-                    digamma]
-                writer.writerow(contents)
+                        isDigamma = 1 #indicating True
+                        digammaCount += 1
+                
+                if (shouldWriteCsv):
+                    contents = [source, row['Book'], row['Line'],
+                        row['Word'], row['Foot'], rowNum, row['Text'], row['Length'],
+                        isDigamma]
+                    writer.writerow(contents)
 
                 prevRow = row
                 rowNum += 1
-
-print("Finished.")
+    
+print(f"Digamma count: {digammaCount}\n"
+    f"Total number of syllables: {rowNum - 1}\n"
+    f"Percentage of syllables with initial digamma: {digammaCount / rowNum * 100:.3f}\n"
+    "Finished.")
