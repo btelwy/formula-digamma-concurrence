@@ -5,6 +5,8 @@ from collections import defaultdict
 import betacode.conv as betacode
 import re
 
+#Note: This script is in need of optimization, and as such, may take a few seconds to run
+
 textFiles = ["Data\\Input Data\\Text Data\\IliadTextEdited.csv",
             "Data\\Input Data\\Text Data\\OdysseyTextEdited.csv"]
 syllFiles = ["Data\\Input Data\\Scansion Data\\IliadEdited\\IliadCombined.csv",
@@ -12,12 +14,47 @@ syllFiles = ["Data\\Input Data\\Scansion Data\\IliadEdited\\IliadCombined.csv",
 xmlFiles = ["Data\\Input Data\\Diorisis\\Homer (0012) - Iliad (001).xml",
             "Data\\Input Data\\Diorisis\\Homer (0012) - Odyssey (002).xml"]
 
-#figure out why the Odyssey is almost all "unknown" for POS
+def getPOSData(tree):
+    #parts of speech recorded in .xml file:
+    #noun, proper, pronoun, particle, article, verb, adjective, adverb, preposition, conjunction
 
-#parts of speech recorded in .xml file:
-#noun, proper, pronoun, particle, article, verb, adjective, adverb, preposition, conjunction
-#if a word is not found in the .xml, make POS "unknown"
+    #a list for part of speech data
+    posData = []
+    unknownCount = 0
+    totalCount = 0
 
+    #for every "word" element in the .xml file
+    for item in tree.findall(f'./text/body//sentence//word'):
+        if item is not None:
+            #get the word's "form" child element
+            wordForm = item.get("form")
+            wordForm = re.sub(r"[1;()/\\+=*\|]", "", wordForm)
+
+            #try to get "POS" child element of the word's "lemma" child element
+            #but this doesn't always exist in the data, so catch errors instead of crashing
+            try:
+                #if it doesn't exist
+                if (item.find("./lemma").get("POS") == None):
+                    wordPOS = "unknown"
+                else:
+                    wordPOS = item.find("./lemma").get("POS")
+            except:
+                wordPOS = "unknown"
+
+            #for debugging purposes
+            if (wordPOS == "unknown"):
+                unknownCount += 1
+            totalCount += 1
+
+            #add an element to the posData list that itself is a list of (word, POS)
+            posData.append([wordForm, wordPOS])
+
+    print(f"Percentage of words per source with \"unknown\" POS: {unknownCount / totalCount * 100:.2f}%")
+    return posData
+
+
+#the dict that will ultimately store a word's location with its data
+#must be placed up here outside the loops so as to only be initialized once
 wordData = {}
 
 #open the three files for the Iliad and Odyssey
@@ -26,104 +63,108 @@ for (textFile, syllFile, xmlFile) in zip(textFiles, syllFiles, xmlFiles):
         open(syllFile, "r", encoding="UTF-8", newline="") as syllF, \
             open(xmlFile, "rb") as xmlF:
         
+        #reader object for the "text" .csv files; skip the header
         textReader = csv.reader(textF)
+        next(textReader)
+        #reader object for the "syllable" .csv files
+        syllRows = syllF.readlines()
+        #index to keep track of rows in syllRows; set to 1 to skip header
+        syllIndex = 1
 
-        syllRows = syllF.readlines() #read with default file IO, not as .csv
-        index = 0 #index for syllRows
-
+        #a tree object for reading the .xml file
         tree = etree.fromstring(xmlF.read())
-        xmlIndex = 0 #index for posData list
-        posData = []
+        #index for keeping track of words in the .xml file
+        xmlIndex = 0
 
-        for item in tree.findall(f'./text/body//sentence//word'):
-            if item is not None:
-                wordForm = item.get("form")
-                wordForm = re.sub(r"[1;()/\\+=*\|]", "", wordForm)
-
-                try:
-                    wordPOS = item.find("./lemma").get("POS")
-                except:
-                    wordPOS = "unknown"
-
-                posData.append([wordForm, wordPOS])
+        #get part of speech data from .xml
+        posData = getPOSData(tree)
         
 
+        #iterate through the rows of the "text" .csv files
         for line in textReader:
-            #title + book number + line number + extra space for word number
+            #a string that is "title" + "book number" + "line number" + extra space for "word number" to be added
             location = line[0] + " " + line[1] + " " + line[2] + " "
 
-            while (index < len(syllRows)): #find the right book and line number
-                if (syllRows[index][0 : len(line[1])] == line[1] and \
-                    syllRows[index][len(line[1]) + 1 : len(line[1]) + 1 + len(line[2])] == line[2]):
+            #find the right book and line number in syllRows,
+            #i.e., the correct row in syllRows
+            while (syllIndex < len(syllRows)):
+                if (syllRows[syllIndex][0 : len(line[1])] == line[1] and \
+                    syllRows[syllIndex][len(line[1]) + 1 : len(line[1]) + 1 + len(line[2])] == line[2]):
                     break
                 
-                index += 1
+                syllIndex += 1
 
-            #where "split" is each word in the line
+            #now add word numbers to each word in that line
+            #where "line[3].split()" is a list of each word in the line
             for wordNum, split in enumerate(line[3].split()):
-                
+                #make word number 1-indexed rather than 0-indexed for consistency
+                wordNum += 1
+
                 #remove enclitics at start of words
                 #note that this excludes enclitics from POS data, in case relevant
-                #potentially deal with this later
                 if (len(split) > 2 and split[1] == "’"): #meaning there's an enclitic
                     split = re.sub(r"^.’", "", split)
                 elif (len(split) > 3 and split[2] == "’"): #meaning there's an enclitic
                     split = re.sub(r"^..’", "", split)
-                elif (split[0] == "’"):
-                    split = re.sub(r"^’", "", split) #also deal with words with erroneous initial ’
+                elif (split[0] == "’"): #also deal with words with erroneous initial ’
+                    split = re.sub(r"^’", "", split)
 
 
+                #a list for holding a word's scansion data
                 metricInfo = []
-                
+                #the index in the "location" string where line[3] should be added
                 wordNumStartIndex = len(line[1]) + 1 + len(line[2]) + 1
+                #the index where line[3] should end
                 wordNumEndIndex = wordNumStartIndex + len(str(wordNum))
 
-                while (index < len(syllRows) and \
-                    syllRows[index][wordNumStartIndex : wordNumEndIndex] \
-                            == str(wordNum + 1)): #find the right word number
+                #find the right word number in the "syllable" .csv file
+                while (syllIndex < len(syllRows) and \
+                    syllRows[syllIndex][wordNumStartIndex : wordNumEndIndex] \
+                            == str(wordNum)):
 
-                    if syllRows[index].__contains__("long"):
+                    #mark the word as long or short in "metricInfo" accordingly
+                    if syllRows[syllIndex].__contains__("long"):
                         metricInfo.append("long")
                     else:
                         metricInfo.append("short")
+                    syllIndex += 1
 
-                    index += 1
 
-
-                #convert Unicode Greek from .csv to Betacode Greek so it matches .xml
+                #convert Unicode polytonic Greek from .csv to Betacode Greek so it matches with Diorisis .xml
                 betaForm = betacode.uni_to_beta(split) #betacode form of word
                 betaForm = re.sub(r"[1;()/\\+=*\|]", "", betaForm)
                 betaForm = re.sub(r"ῂ", "h", betaForm) #since the betacode library doesn't handle this
 
-                #find POS of word from Diorisis .xml
+                #match each word to its POS using Diorisis .xml
                 pos = "unknown"
+                
+                #prevXMLIndex is a backup to not get lost if a word can't be matched
+                prevXMLIndex = xmlIndex
+                loopCount = 0
 
-                if (betaForm != "Text"): #if not the title row of .csv
-                    #first item of every posData list is word form, second is POS
+                #keep going until the word recorded in posData is found in the .xml
+                while (posData[xmlIndex][0] != betaForm):
+                    if xmlIndex < len(posData) - 1:
+                        xmlIndex += 1
+                    loopCount += 1
+
+                    #but don't search an unreasonable number of words ahead if the POS can't be found
+                    #so just move on to the next word in that case
+                    if loopCount > 10:
+                        xmlIndex = prevXMLIndex
+                        break
                     
-                    loopCount = 0
-                    prevXMLIndex = xmlIndex
+                if (loopCount > 10): #if nothing could be found near the syllIndex
+                    pos = "unknown"
+                else:
+                    pos = posData[xmlIndex][1]
 
-                    while (posData[xmlIndex][0] != betaForm):
-                        if xmlIndex < len(posData) - 1:
-                            xmlIndex += 1
-                        loopCount += 1
-
-                        if loopCount > 10:
-                            xmlIndex = prevXMLIndex
-                            break
-                    
-                    if (loopCount > 10): #if nothing could be found near the index
-                        pos = "unknown"
-                    else:
-                        pos = posData[xmlIndex][1]
                 #words with "ᾐ" seem to have unknown POS
                 #starting at Od. 2.388, everything is marked unknown
 
                 wordData[location.join(['', str(wordNum)])] = \
                     {"text": split, "metrics": metricInfo, "POS": pos}
 
-del wordData["Title Book Line 0"] #remove first element from dict
 
 #max, min word number of formula
 maxLen = 7
@@ -132,78 +173,112 @@ minLen = 2
 #minimum occurrences of formula in order to be counted
 minFreq = 4
 
-#split the dict into two lists, which is for some reason much faster
-keys = list(wordData.keys())
-values = list(wordData.values())
+#split the dict into two lists for speed
+#the words' textual locations
+wordDataKeys = list(wordData.keys())
+#and the words' data
+wordDataValues = list(wordData.values())
 
 #dict to hold counts of substrings
 substringDict = defaultdict(int)
+#dict to hold locations of substrings
 substringLocs = defaultdict(list)
 
-#currently only detects formulas by repetition of various lengths
-for n in range(len(wordData) - maxLen): #iterate through words
-    
-    #for lenRange in range(minLen, maxLen + 1):
-    for lenRange in range(maxLen, minLen - 1, -1): #iterate from max to min length
-        substringList = [] #the list that's passed to join() to form a substring
+#the actual formula recognition part
+#iterate through the words in wordData, making sure there's no overshoot
+for n in range(len(wordData) - maxLen):
 
-        #create one substring of each length in lenRange
-        for length in range(lenRange):
-            substringList.append(values[n + length]["text"])
+    #iterate from max to min length
+    for lenRange in range(maxLen, minLen - 1, -1):
+        #a list that will be passed to join() to form a substring
+        joinList = []
+        #a list to hold the parts of speech in the substring
+        posInStr = []
+        #a list to hold the length values of the syllables in the substring
+        metricsInStr = []
+
+        #create one substring of each length in lenRange, concatenating data from each word
+        for currentLength in range(lenRange):
+            joinList.append(wordDataValues[n + currentLength]["text"])
+            posInStr.append(wordDataValues[n + currentLength]["POS"])
+            metricsInStr.append(" ".join(wordDataValues[n + currentLength]["metrics"]))
         
-        substring = " ".join(substringList)
+
+        #filter out substrings that do not have any of these parts of speech
+        qualifyingPOS = ["noun", "proper", "verb", "adjective", "unknown"]
+        posStr = " ".join(posInStr)
+
+        #a string of "long" and "short"
+        metricsStr = " ".join(metricsInStr)
+
+        #TODO: Implement checking for templatic formulas with POS and metrical data
+        #If something is templatic, a flag should be added to it to count its frequency differently
+
+        posOkay = False
+        isTemplate = True #set to True for now so code runs, will default to False later
+        for pos in qualifyingPOS:
+            #validate the substring as soon as it has a POS from the list
+            if (pos in posStr):
+                posOkay = True
         
-        substringDict[substring] += 1
-        substringLocs[substring].append(keys[n])
+        
+        if (posOkay):
+            substring = " ".join(joinList)
+                    
+            #increment the number of times this substring has been found
+            substringDict[substring] += 1
+            #and record the location of this substring instance in a list in the dict
+            substringLocs[substring].append(wordDataKeys[n])
 
 
+#a set is used to ensure no duplicates that could lead to double-remove errors later
+removeList = set()
 substringDictKeys = list(substringDict.keys())
-
-print(len(substringDict))
-removeList = set() #a set, so duplicates are removed
 
 for i in range(len(substringDictKeys) - 1):
     #substrings are added to dict in order of longest to shortest for any given position
     #so if the current sub contains the next sub, and they have the same num of occurrences
     #that next key can be removed
 
-    currentKey = substringDictKeys[i]
-    nextKey = substringDictKeys[i + 1]
+    currentStr = substringDictKeys[i]
+    nextStr = substringDictKeys[i + 1]
 
-    #the case where the current phrase contains the next phrase, and both occur an equal number of times
-    #the larger phrase appearing more often is impossible
-    if (currentKey.__contains__(nextKey) and substringDict[currentKey] == substringDict[nextKey]):
-        removeList.add(nextKey)
-    #if the larger phrase occurs less often than the smaller phrase (inverse is impossible)
-    elif (currentKey.__contains__(nextKey) and substringDict[currentKey] < substringDict[nextKey]):
-        removeList.add(currentKey)
+    #the impossible case where the current phrase contains the next phrase, and both occur an equal number of times
+    #the longer phrase appearing more often is impossible
+    if (currentStr.__contains__(nextStr) and substringDict[currentStr] == substringDict[nextStr]):
+        removeList.add(nextStr)
+    #the impossible case where the longer phrase occurs less often than the shorter phrase
+    elif (currentStr.__contains__(nextStr) and substringDict[currentStr] < substringDict[nextStr]):
+        removeList.add(currentStr)
 
 
 for key in removeList:
     substringDict.pop(key)
 
-print(len(substringDict))
-
-
 #TODO:
-#add functionality to concatenate neighboring/overlapping substrings that occur the same number of times
+#Add functionality to concatenate neighboring/overlapping substrings that occur the same number of times
 #and don't surpoass the length limit once concatenated, else remove them
 #adjacency can be determined using substringLocs
-#consider adding a tag in substringLocs if a word is the last in its line
-#and also implement POS checking for templatic formulas
 
-
+numFormulas = 0
 formulas = [x for x in substringDict if substringDict[x] >= minFreq]
 
+#uncomment the line below in order to print all the formulas (will be long)
 for formula in formulas:
-    pprint.pprint(f"{formula}: {substringLocs[formula]}")
+    #pprint.pprint(f"{formula}: {substringLocs[formula]}")
+    numFormulas += len(substringLocs[formula])
+
+#print a summary of the data
+print(f"Number of formulas fitting the criteria min length = {minLen}, max length = {maxLen}, min frequency = {minFreq}:\n" +
+    f"Non-unique: {numFormulas}\n" +
+    f"Unique: {len(formulas)}")
 
 
 #Uncomment the code below in order to print the detected formulas into a .csv file
 """headerNotWritten = True
 csvName = "Iliad+OdysseyFormulas"
 
-#a variable that will be used to uniquely identify each row of the .csv; the primary key
+#a variable that will be used to uniquely identify each row of the .csv; the primary key in the table
 count = 1
 
 for formula in formulas:
@@ -230,7 +305,7 @@ for formula in formulas:
                 headerNotWritten = False
 
             #Write the row in the .csv with data corresponding to this formula
-            #Increment count by 1 just so it being 1-indexed is consistent with data collected through SQL
+            #Increment count by 1 just so it being 1-syllIndexed is consistent with data collected through SQL
             writer.writerow([source, book, line, wordInLine, numWords, formula, count])
 
             #increment in preparation for next row
