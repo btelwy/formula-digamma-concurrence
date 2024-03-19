@@ -1,7 +1,7 @@
 import numpy as np
 from sklearn import datasets, linear_model, metrics
 import matplotlib as plt
-from matplotlib import pyplot
+from matplotlib import pyplot as pyplt
 
 #mean_squared_error, r2_score
 
