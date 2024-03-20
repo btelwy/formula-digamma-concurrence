@@ -5,15 +5,18 @@ from collections import defaultdict
 import betacode.conv as betacode
 import re
 import numpy as np
+from threading import Thread
+from timeit import timeit
 
-#Note: This script is in need of optimization, and as such, may take a few seconds to run
+
+#Note: This script is in need of optimization (maybe multiprocessing), and as such, may take around a minutes to run
 
 textFiles = ["Data\\Input Data\\Text Data\\IliadTextEdited.csv",
             "Data\\Input Data\\Text Data\\OdysseyTextEdited.csv"]
 syllFiles = ["Data\\Input Data\\Scansion Data\\IliadEdited\\IliadCombined.csv",
             "Data\\Input Data\\Scansion Data\\OdysseyEdited\\OdysseyCombined.csv"]
-xmlFiles = ["Data\\Input Data\\Diorisis\\Homer (0012) - Iliad (001).xml",
-            "Data\\Input Data\\Diorisis\\Homer (0012) - Odyssey (002).xml"]
+xmlFiles = ["Data\\Input Data\\Diorisis corpus selections\\Homer (0012) - Iliad (001).xml",
+            "Data\\Input Data\\Diorisis corpus selections\\Homer (0012) - Odyssey (002).xml"]
 
 
 #Limitation: the detection of templatic formulas doesn't take into account semantics, so it overcounts
@@ -22,8 +25,21 @@ xmlFiles = ["Data\\Input Data\\Diorisis\\Homer (0012) - Iliad (001).xml",
 #And try multiprocessing, divided between Iliad and Odyssey, templatic and non-templatic, etc. for thread safety
 
 
+#max, min word number of formula
+maxLen = 7
+minLen = 2
+
+#minimum occurrences of formula in order to be counted
+minFreq = 4
+
+#not implemented yet
+includeTemplates = True
+#the number of words templatic formulas are allowed to not share with each other while still qualifying
+allowedDifference = 1
+
 #for tracking whether the Iliad or Odyssey is being read
 alreadyRun = False
+
 
 def getPOSData(tree):
     #parts of speech recorded in .xml file:
@@ -39,73 +55,88 @@ def getPOSData(tree):
             wordForm = item.get("form")
             wordForm = re.sub(r"[1;()/\\+=*\|]", "", wordForm)
 
-            #try to get "POS" child element of the word's "lemma" child element
+            #try to get "POS" tag of the word's "lemma" child element
             #but this doesn't always exist in the data, so catch errors instead of crashing
             try:
-                #if it doesn't exist
-                if (item.find("./lemma").get("POS") == None):
-                    wordPOS = "unknown"
-                else:
-                    wordPOS = item.find("./lemma").get("POS")
+                wordPOS = item.find("./lemma").get("POS")
             except:
                 wordPOS = "unknown"
+            if (wordPOS == None):
+                wordPOS = "unknown"
+            
+            #try to get "entry" tag of the word's "lemma" child element
+            #this is the (Unicode, not Betacode) base form of the word
+            #and again catch errors
+            try:
+                wordEntry = item.find("./lemma").get("entry")
+            except:
+                wordEntry = "unknown"
+            if (wordEntry == None):
+                wordEntry = "unknown"
 
             #add an element to the posData list that itself is a list of (word, POS)
-            posData.append([wordForm, wordPOS])
+            posData.append([wordForm, wordPOS, wordEntry])
     
     return posData
 
 
-#check if two strings share at least one word in common
-def shareOneWord(str1, str2):
-    for word in str1.split():
-        if (word in str2.split()):
-            return True
+def countSharedWords(forms1, forms2):
+    #where forms1 and forms2 are lists
+    #check if two strings share at least one word in common
+    #this is done by checking if two forms are of the same word using Diorisis data
+    shared = set()
 
-    return False
+    for word1 in forms1.split():
+        for word2 in forms2.split():
+            if (word1 == word2 and word1 != "unknown"):
+                shared.add(word1)
+    
+    return len(shared)
 
 
-def findTemplates(formulas):
+def findTemplates(formulas, allowedDifference):
     #the possibly templatic entries in the formulas dict
     for attribute in [x for x in formulas if "long" in x]:
-        numMatching = len(formulas[attribute])
-        
+        numTemplatesMatching = len(formulas[attribute])
+        numWords = len(formulas[attribute][0][0].split())
+        areTemplates = set()
+
         #a basic check to filter one-offs out
-        if (numMatching > 1):
-            #check that the templates have at least one word in common
+        if (numTemplatesMatching > 1):
+            #check that the templates share at least all but two words with each other
             #so this isn't a purely templatic approach
             
-            areTemplates = set()
-            for f in range(numMatching - 1):
-                template1 = formulas[attribute][f][0]
+            for f in range(numTemplatesMatching - 1):
+                #list of base forms in the first template
+                forms1 = formulas[attribute][f][3]
 
-                for g in range(f + 1, numMatching):
-                    template2 = formulas[attribute][g][0]
+                for g in range(f + 1, numTemplatesMatching):
+                    #list of base forms in the second template
+                    forms2 = formulas[attribute][g][3]
 
-                    if (shareOneWord(template1, template2)):
+                    if (countSharedWords(forms1, forms2) >= numWords - allowedDifference):
                         areTemplates.add(f)
                         areTemplates.add(g)
 
             #iterate in reverse order to avoid index-out-of-bounds error
-            for n in range(numMatching - 1, -1, -1):
+            for n in range(numTemplatesMatching - 1, -1, -1):
                 if n not in areTemplates:
                     del formulas[attribute][n]
+            
+            #if the list has now been completely emptied
             if (len(formulas[attribute]) == 0):
-                formulas.pop(attribute)
+                del formulas[attribute]
 
         #if this attribute only appears once
         else:
-            formulas.pop(attribute)
+            del formulas[attribute]
     
     return formulas
 
 
-def removeExtraneous(formulas, templatic):
-    #a set is used to ensure no double-remove errors later
-    extraneous = set()
-
+def removeExtraneous(formulas, isTemplatic):
     substrings = []
-    if (not templatic):
+    if (not isTemplatic):
         substrings = [x for x in formulas if "long" not in x]
     else:
         substrings = [x for x in formulas if "long" in x]
@@ -121,27 +152,65 @@ def removeExtraneous(formulas, templatic):
         if (nextStr in currentStr):
             #discard next phrase if it's part of a longer phrase
             if (currentStrFreq == nextStrFreq):
-                extraneous.add(substrings[i + 1])
+                del formulas[substrings[i + 1]]
             #discard current phrase if it contains a more frequent smaller phrase
             elif (currentStrFreq < nextStrFreq):
-                extraneous.add(substrings[i])
-    
-    for key in extraneous:
-        formulas.pop(key)
+                del formulas[substrings[i]]
+                
+    return formulas
+
+
+def mergeTemplates(formulas):
+    duplicates = set()
+
+    templateKeys = [x for x in formulas if "long" in x]
+    for template in templateKeys:
+        #group all the templates with the matching formula of the highest frequency (slightly arbitrary)
+        #if it hasn't been removed yet
+        groupWith = formulas[template][0][0]
+
+        for i in range(len(formulas[template]) - 1, -1, -1):
+            standardFormula = formulas[template][i][0]
+            if (len(formulas[standardFormula]) == 0):
+                duplicates.add(standardFormula)
+                del formulas[template][i]
+                continue
+            elif (len(formulas[standardFormula]) > len(formulas[groupWith])):
+                groupWith = standardFormula
+        
+        
+        #if groupWith (the one with highest frequency) doesn't exist as a key in the dict anymore
+        #it means none of them exist as keys in the dict, all having frequency = 0
+        if (len(formulas[groupWith]) == 0):
+            del formulas[template]
+            continue
+
+        for thisTemplate in formulas[template]:
+            #ensure this template is not the same formula as the formula to be grouped with
+            #otherwise it will be removed from the dict
+            if (thisTemplate[0] == groupWith):
+                continue
+
+            #add the actual string to the duplicates set
+            duplicates.add(thisTemplate[0])
+            #and the [string, location, attribute] list to the dict
+            formulas[groupWith].append(thisTemplate)
+
+        for duplicate in duplicates:
+            #check seems necessary for avoiding double-remove errors
+            if len(formulas[duplicate]) != 0:
+                del formulas[duplicate]
+        #cleared each time so irrelevant entries don't have to be iterated through next time
+        duplicates.clear()
+
+        #delete the formula entry, since it's been merged elsewhere
+        del formulas[template]
 
     return formulas
 
 
 
-def removeDuplicates(formulas):
-    
-
-
-    return formulas
-
-
-
-#the dict that will ultimately store a word's location with its data
+#the dict that will ultimately store each word's data with its location as the key
 #must be placed up here outside the loops so as to only be initialized once
 wordData = {}
 
@@ -255,13 +324,15 @@ for (textFile, syllFile, xmlFile) in zip(textFiles, syllFiles, xmlFiles):
                     unknownCount += 1
                 else:
                     pos = posData[xmlIndex][1]
+                
+                baseForm = posData[xmlIndex][2]
 
                 #words with "ᾐ" seem to have unknown POS
                 #starting at Od. 2.388, everything is marked unknown
 
                 completeLocation = location + " " + str(wordNum)
                 wordData[completeLocation] = \
-                    {"text": split, "metrics": metricInfo, "POS": pos}
+                    {"text": split, "metrics": metricInfo, "POS": pos, "base": baseForm}
 
 
         #print data about the number of "unknown"'s
@@ -273,13 +344,6 @@ for (textFile, syllFile, xmlFile) in zip(textFiles, syllFiles, xmlFiles):
 
 #end of looping through the files for data collection; now process that data
 #---------------------------------------------------------------------------------------
-#max, min word number of formula
-maxLen = 7
-minLen = 2
-
-#minimum occurrences of formula in order to be counted
-minFreq = 4
-
 #split the dict into two lists for speed:
 #the words' textual locations
 wordDataKeys = list(wordData.keys())
@@ -295,86 +359,110 @@ formulas = defaultdict(list)
 #the actual formula recognition part:
 #iterate through all the words
 for n in range(len(wordData) - maxLen):
-
     #iterate from max length to min length
     for lenRange in range(maxLen, minLen - 1, -1):
-        #a list that will be passed to join() to form a substring
-        joinList = []
-        #a list to hold the parts of speech in the substring
-        posInStr = []
-        #a list to hold the length values of the syllables in the substring
-        metricsInStr = []
+        joinList, posInStr, metricsInStr, formsInStr = [], [], [], []
 
         #create one substring of each length in lenRange, concatenating data from each word
         for currentLength in range(lenRange):
             joinList.append(wordDataValues[n + currentLength]["text"])
             posInStr.append(wordDataValues[n + currentLength]["POS"])
             metricsInStr.append(" ".join(wordDataValues[n + currentLength]["metrics"]))
+            formsInStr.append(wordDataValues[n + currentLength]["base"])
         
-
         #filter out substrings that do not have any of these parts of speech
         qualifyingPOS = ["noun", "proper", "verb", "adjective"]
         posStr = " ".join(posInStr)
-
         #a string of "long"s and "short"s
         metricsStr = " ".join(metricsInStr)
 
-
         #regardless of whether a formula is templatic, the parts of speech need to be okay first
-        posOkay = False
+        #i.e., something that's all adverbs probably isn't a formula
+        okayPOSCount, conjCount, particleCount = 0, 0, 0
 
+        conjCount += posStr.count("conjunction")
+        particleCount += posStr.count("particle")
         for pos in qualifyingPOS:
-            #validate the substring as soon as it has a POS from the list
-            if (pos in posStr):
-                posOkay = True
+            #validate the substring (with a slightly arbitrary method)
+            #by checking if half of its words have a POS from this list
+            #and that particles don't make up more than a fourth of the words, conjunctions more than a third
+            #and that there are no "unknown"s
+            okayPOSCount += posStr.count(pos)
         
-
-        if (posOkay):
+        if (okayPOSCount >= float(len(posInStr)) / 2 and conjCount <= float(len(posInStr)) / 3 \
+            and particleCount <= float(len(posInStr)) / 4 and "unknown" not in posInStr):
             substring = " ".join(joinList)
             attribute = posStr + " " + metricsStr
 
             #and record the location of this substring instance
-            formulas[substring].append([substring, wordDataKeys[n], attribute])
+            formulas[substring].append([substring, wordDataKeys[n], attribute, " ".join(formsInStr)])
             #as well as information about it as a potential template
-            formulas[attribute].append([substring, wordDataKeys[n], attribute])
+            formulas[attribute].append([substring, "T-" + wordDataKeys[n], attribute, " ".join(formsInStr)])
 
 
 #to count as a formula repetition, either the formula's text needs to match another's,
 #or both its parts of speech and metrics need to match another's
 
-#remove templatic entries that aren't actually templates
-formulas = findTemplates(formulas)
 
-#remove extraneous templates
-formulas = removeExtraneous(formulas, True)
+
+#remove templatic entries that aren't actually templates
+formulas = findTemplates(formulas, allowedDifference)
+
 #remove extraneous standard formulas
-formulas = removeExtraneous(formulas, False)
+formulas = removeExtraneous(formulas, isTemplatic=False)
+#remove extraneous templates
+formulas = removeExtraneous(formulas, isTemplatic=True)
+
+#for some reason, there are a lot of empty lists after removeExtraneous
+#if you find why that's happening later, remove this part
+emptyItems = [x for x in formulas if len(formulas[x]) == 0]
+for item in emptyItems:
+    del formulas[item]
 
 #remove overlap between templatic and standard formulas
-formulas = removeDuplicates(formulas)
+formulas = mergeTemplates(formulas)
 
+#remove standard formulas that appear fewer than minFreq times
+#including corresponding templates
+allStandards = [x for x in formulas if "long" not in x and len(formulas[x]) < minFreq]
+for standard in allStandards:
+    del formulas[standard]
 
 
 #TODO:
 #Add functionality to concatenate neighboring/overlapping substrings that occur the same number of times
 #and that don't surpoass the length limit once concatenated, else remove them
-#adjacency can be determined using substringLocs
+#adjacency can be determined using location
 
-
-allFormulas = [x for x in formulas if len(formulas[x]) > minFreq]
+withoutTemplates = []
 totalFormulas, totalStandard, totalTemplatic, totalStandardUnique, totalTemplaticUnique = 0, 0, 0, 0, 0
+for index, formula in enumerate(formulas):
+    numFormulas = len(formulas[formula])
 
-for formula in allFormulas:
-    totalFormulas += len(formulas[formula])
-    if ("long" in formula):
-        totalTemplatic += len(formulas[formula])
-        totalTemplaticUnique += 1
-    else:
-        totalStandard += len(formulas[formula])
-        totalStandardUnique += 1
+    i = 0
+    while(i < numFormulas and "T-" not in formulas[formula][i][1]):
+        i += 1
+
+    j = i
+    uniqueTemplates = set()
+    while (j < numFormulas):
+        uniqueTemplates.add(formulas[formula][j][0])
+        j += 1
+
+    #if there were no templates
+    if (i == j):
+        withoutTemplates.append(index)
+
+    totalStandard += i
+    totalStandardUnique += 1
+
+    totalTemplatic += numFormulas - i
+    totalTemplaticUnique += len(uniqueTemplates)
+
+    totalFormulas += numFormulas
 
     """uncomment this line in order to print all the formulas (will be long)"""
-    pprint(f"{formula}: {len(formulas[formula])}, {formulas[formula]}")
+    #pprint(f"{formula}: {len(formulas[formula])}, {formulas[formula]}")
 
 
 #print a summary of the data
@@ -385,32 +473,47 @@ print(f"Number of formulas fitting the chosen criteria min length = {minLen}, ma
     f"Standard unique: {totalStandardUnique}\n" +
     f"Templatic unique: {totalTemplaticUnique}")
 
-#Note: there were 60,000 total formulas before this editing
-
 
 #Uncomment the code below in order to print the detected formulas into a .csv file
 """headerNotWritten = True
 csvName = "Iliad+OdysseyFormulas" + ".csv"
 
-#a variable that will be used to uniquely identify each row of the .csv; the primary key in the table
-count = 1
+#a variable that will be used to uniquely identify each row of the .csv; the primary key
+pk = 1
 
-for formula in formulas:
-    for location in substringLocs[formula]:
-        with open("Data\\Output Data\\" + csvName, "a", newline='', encoding="utf8") as output:
-            writer = csv.writer(output)
+with open("Data\\Output Data\\" + csvName, "a", newline='', encoding="utf8") as output:
+    writer = csv.writer(output)
 
-            #number of words in the formula
-            numWords = len(formula.split())
-            
-            #whether it's a templatic instance; boolean represented as int, to be compatible with SQL
+    for index, entry in enumerate(formulas):
+        
+        #whether this entry contains templates; boolean represented as int, to be compatible with SQL
+        templatic = 1
+        if (index in withoutTemplates):
             templatic = 0
-            template = ""
+
+        for item in formulas[entry]:
+            #number of words in the formula
+            formula = item[0]
+            location = item[1]
+            attr = item[2].split()
+            posAttr, metricsAttr = "", ""
+            numWords = len(formula.split())
+
+            for i in range(numWords):
+                posAttr += attr[i]
+            posAttr = posAttr.replace("pronoun", "Prn ").replace("noun", "N ").replace("verb", "V ").replace("proper", "Prop ")
+            posAttr = posAttr.replace("adjective", "Adj ").replace("adverb", "Adv ").replace("article", "Ar ").replace("interjection", "I ")
+            posAttr = posAttr.replace("particle", "Pa ").replace("conjunction", "C ").replace("preposition", "Prep ")
+            posAttr = posAttr.rstrip()
+
+            for i in range(numWords, len(attr)):
+                metricsAttr += attr[i]
+            metricsAttr = metricsAttr.replace("long", "_ ").replace("short", ". ")
+            metricsAttr = metricsAttr.rstrip()
+
             if ("T-" in location):
                 #remove the "T-" from the front so it's not printed in the end result
                 location = location[2:]
-                templatic = 1
-                template = wordData[location]
 
             #Each location value consists of four "words", e.g., "Od 23 318 1"
             locationData = location.split()
@@ -423,14 +526,14 @@ for formula in formulas:
 
             #write .csv header once
             if headerNotWritten:
-                writer.writerow(["Source","Book","Line","Word","NumWords","Formula","IsTemplatic","Template","ID"])
+                writer.writerow(["Source","Book","Line","Word","NumWords","Formula","IsTemplatic","POS","Metrics","ID"])
                 headerNotWritten = False
 
             #Write the row in the .csv with data corresponding to this formula
             #Increment count by 1 just so it being 1-syllIndexed is consistent with data collected through SQL
-            writer.writerow([source, book, line, wordInLine, numWords, formula, templatic, template, count])
+            writer.writerow([source, book, line, wordInLine, numWords, formula, templatic, posAttr, metricsAttr, pk])
 
             #increment in preparation for next row
-            count += 1
+            pk += 1
             
 print("Finished.")"""
