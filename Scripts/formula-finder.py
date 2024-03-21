@@ -4,12 +4,11 @@ from pprint import pprint as pprint
 from collections import defaultdict
 import betacode.conv as betacode
 import re
-import numpy as np
 from threading import Thread
-from timeit import timeit
 
 
-#Note: This script is in need of optimization (maybe multiprocessing), and as such, may take around a minutes to run
+#Note: This script has not been optimized
+#And as such, may take around a minute to run
 
 textFiles = ["Data\\Input Data\\Text Data\\IliadTextEdited.csv",
             "Data\\Input Data\\Text Data\\OdysseyTextEdited.csv"]

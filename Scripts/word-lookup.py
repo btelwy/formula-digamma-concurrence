@@ -1,5 +1,12 @@
 import csv
 import unicodedata
+import mysql.connector
+import sqlparse
+from collections import defaultdict
+
+#TODO: Implement features besides counting instances of a word
+#Maybe have a "starts with" mode
+
 
 def normalize(str):
     return ''.join(c for c in unicodedata.normalize('NFD', str.lower())
@@ -7,8 +14,6 @@ def normalize(str):
 
 
 files = ["TextEdited\\IliadTextEdited.csv", "TextEdited\\OdysseyTextEdited.csv"]
-
-#maybe consider a "starts with" mode
 
 print("Input a Greek word:")
 target = input()

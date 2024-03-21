@@ -1,11 +1,11 @@
 import numpy as np
 from sklearn import datasets, linear_model, metrics
-import matplotlib as plt
-from matplotlib import pyplot as pyplt
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-#mean_squared_error, r2_score
+#TODO: Clean all of this up
 
-model = linear_model.LinearRegression()
+"""model = linear_model.LinearRegression()
 
 model.fit(x, y)
 rSq = model.score(x, y)
@@ -13,22 +13,21 @@ rSq = model.score(x, y)
 print(f"intercept: {model.intercept_}")
 print(f"slope: {model.coef_}")
 
-yPredicted = model.predict(x)
+yPredicted = model.predict(x)"""
 
 
+data = np.random.random((16, 16))
 
+#Heat map of 2D array
+plt.imshow(data, cmap = "magma")
 
-#heatmap of 2D array
-# Function to show the heat map
-plt.pyplot.imshow( data , cmap = 'magma' )
+#Add details to the plot
+plt.title("2D Heat Map")
+plt.xlabel("X-axis")
+plt.ylabel("Y-axis")
 
-# Adding details to the plot
-plt.title( "2-D Heat Map" )
-plt.xlabel('x-axis')
-plt.ylabel('y-axis')
-
-# Adding a color bar to the plot
+#Add a color bar to the plot
 plt.colorbar()
 
-# Displaying the plot
+#Display the plot
 plt.show()
