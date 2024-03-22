@@ -1,8 +1,5 @@
 import csv
 import unicodedata
-import mysql.connector
-import sqlparse
-from collections import defaultdict
 
 #TODO: Implement features besides counting instances of a word
 #Maybe have a "starts with" mode
@@ -30,4 +27,4 @@ for file in files:
                 print(line["Title"] + ". " + line["Book"] + "." + line["Line"] + ": " + line["Text"])
                 count += 1
 
-print(f"{count} instances of \"{target}\" found")
+print(f"{count} instances of \"{target}\" found.")

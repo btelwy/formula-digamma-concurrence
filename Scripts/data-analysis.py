@@ -26,7 +26,6 @@ data = data.drop(columns=["Source", "Book"])
 multiIndex = pd.MultiIndex.from_frame(split, names=["Source", "Book"])
 multiIndex.name = "Location"
 data = data.set_index(multiIndex)
-print(data)
 
 #data = data.pivot(index=multiIndex, columns=["2", "3", "4", "5", "6", "7"])
 
