@@ -1,4 +1,8 @@
+import pandas as pd
+#Not accessed directly, but still necessary
 import mysql.connector
+#suggested for use alongside pandas
+from sqlalchemy import create_engine
 
 #This script is an example of querying from the database dump provided
 #from within Python, given you put database on your own local server
@@ -9,16 +13,17 @@ import mysql.connector
 #my configuration; replace with your own information
 username = "root"
 passwd = "mysql"
+host = "localhost"
+port = 3306
 
 #"digamma" is the only database within the dump
 #and it contains these tables:
 #scansion, digammas, formulas, concurrence
-db = mysql.connector.connect(
-    database="digamma",
-    host="localhost",
-    user=username,
-    password=passwd
-)
+dbName = "digamma"
+
+connectionURL = f"mysql+mysqlconnector://{username}:{passwd}@{host}:{port}/{dbName}"
+engine = create_engine(connectionURL, echo=True)
+
 
 #an example query
 query = """
@@ -27,14 +32,14 @@ WHERE Source LIKE "Od"
 GROUP BY Book, HasDigamma
 """
 
-#execute the query
-cursor = db.cursor()
-try:
-    cursor.execute(query)
-    print("Query executed successfully.")
-except:
-    print("Something went wrong.")
+with engine.connect() as con:
+    #execute the query
+    try:
+        result = pd.read_sql_query(query, con)
+        print("Query executed successfully.")
+    except:
+        print("Something went wrong.")
+
 
 #print the results, to show it's working
-for item in cursor:
-    print(item)
+print(result)
