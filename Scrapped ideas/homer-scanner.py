@@ -1,7 +1,7 @@
 from urllib.request import urlopen
 from bs4 import BeautifulSoup
 import re
-import unicodedata
+import unicodedata2
 import csv
 
 
@@ -136,8 +136,8 @@ def changeDiacritics(line, index, instruction):
 
 
 def normalize(str):
-    return ''.join(c for c in unicodedata.normalize('NFD', str.lower())
-        if unicodedata.category(c) != 'Mn')
+    return ''.join(c for c in unicodedata2.normalize('NFD', str.lower())
+        if unicodedata2.category(c) != 'Mn')
 
 
 def longByPosition(line, syllableLengths):

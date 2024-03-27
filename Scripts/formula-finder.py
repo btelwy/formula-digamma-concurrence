@@ -4,7 +4,6 @@ from pprint import pprint as pprint
 from collections import defaultdict
 import betacode.conv as betacode
 import re
-from threading import Thread
 
 
 #Note: This script has not been optimized

@@ -1,13 +1,13 @@
 import csv
-import unicodedata
+import unicodedata2
 
 #TODO: Implement features besides counting instances of a word
 #Maybe have a "starts with" mode
 
 
 def normalize(str):
-    return ''.join(c for c in unicodedata.normalize('NFD', str.lower())
-        if unicodedata.category(c) != 'Mn')
+    return ''.join(c for c in unicodedata2.normalize('NFD', str.lower())
+        if unicodedata2.category(c) != 'Mn')
 
 
 files = ["TextEdited\\IliadTextEdited.csv", "TextEdited\\OdysseyTextEdited.csv"]

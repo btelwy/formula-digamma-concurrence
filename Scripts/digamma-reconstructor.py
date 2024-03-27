@@ -1,10 +1,11 @@
 import csv
 import unicodedata
 
-#limitation: plosive + liquid is always treated as
+#Limitation: plosive + liquid is always treated as
 #not satisfying long by position
-#another one: the way the source represents elision
 
+#Set to false to not write output to a .csv file (not implemented yet)
+shouldWriteCsv = True
 
 """
 Cases where initial digamma can be reconstructed:
@@ -213,9 +214,6 @@ inputCsvs = ["Data\\Input Data\\Scansion Data\\IliadEdited\\IliadCombined.csv",
 
 csvs = [inputCsvs[0], inputCsvs[1]]
 
-#Set to true to write output to a .csv file
-shouldWriteCsv = False
-
 #so the first line of the .csv isn't repeated
 headerWritten = False
 
@@ -226,9 +224,8 @@ digammaCount = 0 #number of possible digamma reconstructions
 
 
 for inputCsv in inputCsvs:
-    with open(newCsv, "a", newline='', encoding="utf8") as output:
-        with open(inputCsv, "r", newline='', encoding="utf8") as input:
-            
+    with open(inputCsv, "r", newline='', encoding="utf8") as input:
+        with open(newCsv, "a", newline='', encoding="utf8") as output:
             writer = csv.writer(output)
             reader = csv.DictReader(input)
 
@@ -238,7 +235,7 @@ for inputCsv in inputCsvs:
             input.seek(0)
             next(reader)
 
-            if (not headerWritten and shouldWriteCsv):
+            if (shouldWriteCsv and not headerWritten):
                 writer.writerow(["Source","Book","Line","Word","Foot","Syllable","Text","Length","HasDigamma"])
                 headerWritten = True
 
@@ -268,8 +265,9 @@ for inputCsv in inputCsvs:
 
                 prevRow = row
                 rowNum += 1
-    
+
+
 print(f"Digamma count: {digammaCount}\n"
     f"Total number of syllables: {rowNum - 1}\n"
-    f"Percentage of syllables with initial digamma: {digammaCount / rowNum * 100:.3f}\n"
+    f"Percentage of syllables with initial digamma: {digammaCount / rowNum * 100:.2f}%\n"
     "Finished.")

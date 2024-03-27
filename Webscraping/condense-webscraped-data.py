@@ -1,6 +1,5 @@
-#used after update-webscraped-data
-#condenses the ____Edited folders into one .csv each
-
+#use after update-webscraped-data
+#condenses the (Iliad/Odyssey)Edited folders into one .csv each
 import csv
 
 headerNotWritten = True

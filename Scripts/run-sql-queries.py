@@ -4,10 +4,10 @@ import mysql.connector
 #suggested for use alongside pandas
 from sqlalchemy import create_engine
 
-#This script is an example of querying from the database dump provided
-#from within Python, given you put database on your own local server
-#The MySQL download can be found at:
-#https://dev.mysql.com/downloads/installer/
+"""This script is an example of querying from the database dump provided
+from within Python, given you put database on your own local server
+The MySQL download can be found at:
+https://dev.mysql.com/downloads/installer/"""
 
 
 #my configuration; replace with your own information
@@ -27,9 +27,7 @@ engine = create_engine(connectionURL, echo=True)
 
 #an example query
 query = """
-SELECT Book, HasDigamma, count(*) FROM concurrence
-WHERE Source LIKE "Od"
-GROUP BY Book, HasDigamma
+SELECT * FROM digammas;
 """
 
 with engine.connect() as con:

@@ -1,5 +1,4 @@
 #use after webscraper-all
-
 import csv
 
 for i in range (1, 25):
